@@ -4,7 +4,7 @@ defmodule NexusTickets.MixProject do
   def project do
     [
       app: :nexus_tickets,
-      version: "0.1.2",
+      version: "0.2.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps()

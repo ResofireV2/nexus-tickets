@@ -2,7 +2,7 @@ defmodule NexusTickets do
   @moduledoc """
   Nexus Support — product support ticket system.
 
-  Stage 1: categories + admin panel.
+  Stage 2: ticket creation, member index, ticket detail.
   """
 
   use Nexus.Extensions.Behaviour
@@ -10,7 +10,9 @@ defmodule NexusTickets do
   @impl true
   def migrations do
     [
-      NexusTickets.Migrations.V1CreateCategories
+      NexusTickets.Migrations.V1CreateCategories,
+      NexusTickets.Migrations.V2CreateTickets,
+      NexusTickets.Migrations.V3CreateReplies
     ]
   end
 
