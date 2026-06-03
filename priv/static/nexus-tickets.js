@@ -280,26 +280,43 @@
     { key: "awaiting_user",label: "Awaiting Reply" },
     { key: "resolved",     label: "Resolved" },
     { key: "closed",       label: "Closed" },
+    { key: "deleted",      label: "Deleted", adminOnly: true },
   ];
 
   function TicketIndexPage({ currentUser, navigate, filter }) {
     const [tickets,  setTickets]  = useState(null);
     const [loading,  setLoading]  = useState(true);
     const activeFilter = filter || "all";
-    const isStaff = currentUser?.role === "moderator" || currentUser?.role === "admin";
+    const isStaff  = currentUser?.role === "moderator" || currentUser?.role === "admin";
+    const isAdmin  = currentUser?.role === "admin";
+    const isDeleted = activeFilter === "deleted";
 
-    useEffect(() => {
+    function loadTickets() {
       if (!currentUser) { setLoading(false); return; }
       setLoading(true);
 
-      const path = isStaff
-        ? `/admin/tickets${activeFilter !== "all" ? `?status=${activeFilter}` : ""}`
-        : "/tickets";
+      const path = isDeleted
+        ? "/admin/tickets/deleted"
+        : isStaff
+          ? `/admin/tickets${activeFilter !== "all" ? `?status=${activeFilter}` : ""}`
+          : "/tickets";
 
       api("GET", path)
         .then(d => { setTickets(d.tickets); setLoading(false); })
         .catch(e => { toast(e.message, "err"); setLoading(false); });
-    }, [currentUser, activeFilter]);
+    }
+
+    useEffect(() => { loadTickets(); }, [currentUser, activeFilter]);
+
+    async function handleRestore(ticket) {
+      try {
+        await api("PATCH", `/tickets/${ticket.id}/restore`);
+        setTickets(ts => ts.filter(t => t.id !== ticket.id));
+        toast("Ticket restored");
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    }
 
     if (!currentUser) {
       return window.React.createElement(EmptyState, {
@@ -339,7 +356,9 @@
           alignSelf: "flex-start",
         }
       },
-        STATUS_FILTERS.map(f =>
+        STATUS_FILTERS
+          .filter(f => !f.adminOnly || isAdmin)
+          .map(f =>
           window.React.createElement("button", {
             key: f.key,
             type: "button",
@@ -367,12 +386,14 @@
           )
         : tickets && tickets.length === 0
           ? window.React.createElement(EmptyState, {
-              icon: "fa-ticket",
-              title: "No tickets",
-              subtitle: isStaff
-                ? "No tickets match this filter."
-                : "You haven't opened any support tickets yet.",
-              action: !isStaff && window.React.createElement("button", {
+              icon: isDeleted ? "fa-trash" : "fa-ticket",
+              title: isDeleted ? "No deleted tickets" : "No tickets",
+              subtitle: isDeleted
+                ? "No tickets have been deleted."
+                : isStaff
+                  ? "No tickets match this filter."
+                  : "You haven't opened any support tickets yet.",
+              action: !isStaff && !isDeleted && window.React.createElement("button", {
                 type: "button", className: "btn-primary",
                 style: { fontSize: 13 },
                 onClick: () => NE.navigate(`/ext/${SLUG}/new`),
@@ -380,12 +401,18 @@
             })
           : window.React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
               (tickets || []).map(ticket =>
-                window.React.createElement(TicketRow, {
-                  key: ticket.id,
-                  ticket,
-                  isStaff,
-                  onClick: () => NE.navigate(`/ext/${SLUG}/${ticket.id}`),
-                })
+                isDeleted
+                  ? window.React.createElement(DeletedTicketRow, {
+                      key: ticket.id,
+                      ticket,
+                      onRestore: handleRestore,
+                    })
+                  : window.React.createElement(TicketRow, {
+                      key: ticket.id,
+                      ticket,
+                      isStaff,
+                      onClick: () => NE.navigate(`/ext/${SLUG}/${ticket.id}`),
+                    })
               )
             )
     );
@@ -466,6 +493,76 @@
   // Ticket detail page
   // ---------------------------------------------------------------------------
 
+  function DeletedTicketRow({ ticket, onRestore }) {
+    const [confirming, setConfirming] = useState(false);
+    return window.React.createElement("div", {
+      style: {
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "12px 16px",
+        background: "var(--s2)",
+        border: "0.5px solid var(--b1)",
+        borderRadius: 10,
+        opacity: 0.7,
+      }
+    },
+      window.React.createElement("div", {
+        style: {
+          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+          background: "var(--s3)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--t5)", fontSize: 14,
+        }
+      },
+        window.React.createElement("i", { className: "fa-solid fa-trash" })
+      ),
+      window.React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+        window.React.createElement("div", {
+          style: {
+            fontSize: 13, fontWeight: 500, color: "var(--t3)",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            marginBottom: 4, textDecoration: "line-through",
+          }
+        }, ticket.subject),
+        window.React.createElement("div", {
+          style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }
+        },
+          window.React.createElement(CategoryPill, { category: ticket.category }),
+          ticket.user && window.React.createElement("span", {
+            style: { fontSize: 11, color: "var(--t5)" }
+          }, ticket.user.username),
+          window.React.createElement("span", { style: { fontSize: 11, color: "var(--t5)" } },
+            `deleted ${fmt(ticket.inserted_at)}`
+          )
+        )
+      ),
+      confirming
+        ? window.React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 } },
+            window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)" } }, "Restore?"),
+            window.React.createElement("button", {
+              type: "button",
+              onClick: () => onRestore(ticket),
+              style: {
+                fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+                background: "var(--green)", color: "#fff", border: "none", fontWeight: 500,
+              }
+            }, "Yes"),
+            window.React.createElement("button", {
+              type: "button",
+              onClick: () => setConfirming(false),
+              style: {
+                fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+                background: "var(--s3)", color: "var(--t3)", border: "none",
+              }
+            }, "No")
+          )
+        : window.React.createElement("button", {
+            type: "button", className: "btn-ghost",
+            style: { fontSize: 12, flexShrink: 0 },
+            onClick: e => { e.stopPropagation(); setConfirming(true); },
+          }, "Restore")
+    );
+  }
+
   function TicketDetailPage({ currentUser, navigate, id }) {
     const [ticket,      setTicket]      = useState(null);
     const [loading,     setLoading]     = useState(true);
@@ -478,7 +575,9 @@
     const [editSaving,  setEditSaving]  = useState(false);
     const [staffList,   setStaffList]   = useState([]);
     const [updating,    setUpdating]    = useState(false);
+    const [deleting,    setDeleting]    = useState(false);
     const isStaff = currentUser?.role === "moderator" || currentUser?.role === "admin";
+    const isAdmin = currentUser?.role === "admin";
 
     function loadTicket() {
       if (!currentUser || !id) { setLoading(false); return; }
@@ -509,6 +608,18 @@
         toast(e.message, "err");
       } finally {
         setUpdating(false);
+      }
+    }
+
+    async function deleteTicket() {
+      setDeleting(true);
+      try {
+        await api("DELETE", `/tickets/${id}`);
+        toast("Ticket deleted");
+        NE.navigate(`/ext/${SLUG}/`);
+      } catch (e) {
+        toast(e.message, "err");
+        setDeleting(false);
       }
     }
 
@@ -695,6 +806,39 @@
           },
             window.React.createElement("i", { className: "fa-solid fa-spinner fa-spin", style: { marginRight: 4 } }),
             "Saving…"
+          ),
+
+          // Delete button — pushed to the right, admin only
+          isAdmin && window.React.createElement("div", { style: { marginLeft: "auto" } },
+            deleting === "confirm"
+              ? window.React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                  window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)" } }, "Delete ticket?"),
+                  window.React.createElement("button", {
+                    type: "button",
+                    onClick: deleteTicket,
+                    style: {
+                      fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+                      background: "var(--red)", color: "#fff", border: "none", fontWeight: 500,
+                    }
+                  }, "Yes"),
+                  window.React.createElement("button", {
+                    type: "button",
+                    onClick: () => setDeleting(false),
+                    style: {
+                      fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+                      background: "var(--s3)", color: "var(--t3)", border: "none",
+                    }
+                  }, "No")
+                )
+              : window.React.createElement("button", {
+                  type: "button", className: "btn-ghost",
+                  style: { fontSize: 11, color: "var(--t4)", borderColor: "var(--b2)" },
+                  onClick: () => setDeleting("confirm"),
+                  disabled: updating,
+                },
+                  window.React.createElement("i", { className: "fa-solid fa-trash", style: { marginRight: 5, fontSize: 10 } }),
+                  "Delete"
+                )
           )
         ),
 

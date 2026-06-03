@@ -45,6 +45,15 @@ defmodule NexusTickets.Tickets do
     Repo.all(query)
   end
 
+  @doc "Returns all soft-deleted tickets for the restore queue, newest first."
+  def list_deleted_tickets do
+    Ticket
+    |> where([t], not is_nil(t.deleted_at))
+    |> order_by([t], desc: t.deleted_at)
+    |> preload([:category, :user, :assigned_staff])
+    |> Repo.all()
+  end
+
   def get_ticket(id) do
     Ticket
     |> where([t], t.id == ^id and is_nil(t.deleted_at))

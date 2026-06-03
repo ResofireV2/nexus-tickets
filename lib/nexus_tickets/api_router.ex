@@ -89,6 +89,19 @@ defmodule NexusTickets.ApiRouter do
   end
 
   # ---------------------------------------------------------------------------
+  # Staff — list soft-deleted tickets (for restore)
+  # ---------------------------------------------------------------------------
+
+  get "/admin/tickets/deleted" do
+    case check_permission(conn, "can_delete_tickets") do
+      :error -> forbidden(conn)
+      :ok ->
+        tickets = Tickets.list_deleted_tickets()
+        send_json(conn, 200, %{tickets: Enum.map(tickets, &ticket_json/1)})
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Staff — list all tickets
   # ---------------------------------------------------------------------------
 
@@ -501,6 +514,7 @@ defmodule NexusTickets.ApiRouter do
       status:         t.status,
       last_reply_at:  format_dt(t.last_reply_at),
       inserted_at:    format_dt(t.inserted_at),
+      deleted_at:     format_dt(t.deleted_at),
       category:       t.category && category_json(t.category),
       user:           t.user && user_json(t.user),
       assigned_staff: t.assigned_staff && user_json(t.assigned_staff)
