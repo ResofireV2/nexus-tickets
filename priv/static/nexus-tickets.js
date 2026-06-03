@@ -43,7 +43,7 @@
 
   const STATUS_COLORS = {
     open:          { bg: "rgba(16,163,127,0.12)", text: "var(--green)",  border: "rgba(16,163,127,0.25)" },
-    in_progress:   { bg: "rgba(91,78,245,0.12)",  text: "var(--ac)",     border: "rgba(91,78,245,0.25)"  },
+    in_progress:   { bg: "var(--ac-bg)",              text: "var(--ac-text)", border: "var(--ac-border)"   },
     awaiting_user: { bg: "rgba(251,191,36,0.12)", text: "var(--amber)",  border: "rgba(251,191,36,0.25)" },
     resolved:      { bg: "rgba(100,116,139,0.12)",text: "var(--t4)",     border: "rgba(100,116,139,0.25)"},
     closed:        { bg: "rgba(100,116,139,0.08)",text: "var(--t5)",     border: "rgba(100,116,139,0.18)"},
