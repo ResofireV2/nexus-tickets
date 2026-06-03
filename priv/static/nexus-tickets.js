@@ -773,8 +773,8 @@
             reply.user?.role && reply.user.role !== "member" && window.React.createElement("span", {
               style: {
                 fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 20,
-                background: "rgba(91,78,245,0.1)", color: "var(--ac)",
-                border: "0.5px solid rgba(91,78,245,0.2)",
+                background: "var(--ac-bg)", color: "var(--ac-text)",
+                border: "0.5px solid var(--ac-border)",
               }
             }, reply.user.role),
             isNote && window.React.createElement("span", {
