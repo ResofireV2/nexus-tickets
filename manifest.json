@@ -1,0 +1,84 @@
+{
+  "$schema": "https://YOUR-NEXUS-HOST/manifest_schema.json",
+  "manifest_version": 2,
+  "name": "Nexus Support",
+  "slug": "nexus-tickets",
+  "version": "1.0.0",
+  "module": "NexusTickets",
+  "description": "Product support ticket system for Nexus.",
+  "author": "ResofireV2",
+  "homepage": "https://github.com/ResofireV2/nexus-tickets",
+  "repository": "https://github.com/ResofireV2/nexus-tickets",
+  "license": "MIT",
+  "tags": ["support", "helpdesk", "tickets"],
+  "js_bundle": "nexus-tickets.js",
+
+  "permissions": [
+    {
+      "key": "can_create_ticket",
+      "label": "Can open a support ticket",
+      "default": "member"
+    },
+    {
+      "key": "can_handle_tickets",
+      "label": "Can handle support tickets (change status, assign, post internal notes)",
+      "default": "moderator"
+    },
+    {
+      "key": "can_delete_tickets",
+      "label": "Can delete support tickets",
+      "default": "admin"
+    },
+    {
+      "key": "can_manage_categories",
+      "label": "Can manage support categories",
+      "default": "admin"
+    }
+  ],
+
+  "notification_types": [
+    {
+      "key": "new_reply",
+      "label": "New reply on my support ticket",
+      "description": "Sent when someone replies to a support ticket you opened.",
+      "icon": "fa-reply",
+      "channels": ["web", "email"],
+      "default_preferences": { "web": true, "email": false }
+    },
+    {
+      "key": "new_ticket",
+      "label": "New support ticket opened",
+      "description": "Sent to staff when a new support ticket is submitted.",
+      "icon": "fa-ticket",
+      "channels": ["web"],
+      "default_preferences": { "web": true }
+    }
+  ],
+
+  "routes": [
+    { "path": "/",              "title": "Support" },
+    { "path": "/new",           "title": "New Ticket" },
+    { "path": "/:id",           "title": "Ticket" },
+    { "path": "/status/:filter","title": "Support" }
+  ],
+
+  "explore": {
+    "label": "Support",
+    "icon": "fa-life-ring",
+    "path": "/"
+  },
+
+  "admin_panel": {
+    "label": "Nexus Support",
+    "icon": "fa-life-ring"
+  },
+
+  "right_widgets": [
+    {
+      "id": "support-summary",
+      "label": "Support",
+      "scope": "extension",
+      "priority": 50
+    }
+  ]
+}
