@@ -462,13 +462,23 @@
   // Ticket detail page
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Ticket detail page
+  // ---------------------------------------------------------------------------
+
   function TicketDetailPage({ currentUser, navigate, id }) {
-    const [ticket,    setTicket]    = useState(null);
-    const [loading,   setLoading]   = useState(true);
-    const [notFound,  setNotFound]  = useState(false);
+    const [ticket,      setTicket]      = useState(null);
+    const [loading,     setLoading]     = useState(true);
+    const [notFound,    setNotFound]    = useState(false);
+    const [replyText,   setReplyText]   = useState("");
+    const [isNote,      setIsNote]      = useState(false);
+    const [submitting,  setSubmitting]  = useState(false);
+    const [editingId,   setEditingId]   = useState(null);  // reply id being edited
+    const [editText,    setEditText]    = useState("");
+    const [editSaving,  setEditSaving]  = useState(false);
     const isStaff = currentUser?.role === "moderator" || currentUser?.role === "admin";
 
-    useEffect(() => {
+    function loadTicket() {
       if (!currentUser || !id) { setLoading(false); return; }
       api("GET", `/tickets/${id}`)
         .then(d => { setTicket(d.ticket); setLoading(false); })
@@ -477,7 +487,65 @@
           else toast(e.message, "err");
           setLoading(false);
         });
-    }, [id, currentUser]);
+    }
+
+    useEffect(() => { loadTicket(); }, [id, currentUser]);
+
+    async function handleReply() {
+      if (!replyText.trim()) return;
+      setSubmitting(true);
+      try {
+        const data = await api("POST", `/tickets/${id}/replies`, {
+          content:          replyText.trim(),
+          is_internal_note: isNote,
+        });
+        setTicket(t => ({ ...t, replies: [...(t.replies || []), data.reply] }));
+        setReplyText("");
+        setIsNote(false);
+      } catch (e) {
+        toast(e.message, "err");
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    function startEdit(reply) {
+      setEditingId(reply.id);
+      setEditText(reply.content);
+    }
+
+    function cancelEdit() {
+      setEditingId(null);
+      setEditText("");
+    }
+
+    async function saveEdit(replyId) {
+      if (!editText.trim()) return;
+      setEditSaving(true);
+      try {
+        const data = await api("PATCH", `/replies/${replyId}`, { content: editText.trim() });
+        setTicket(t => ({
+          ...t,
+          replies: t.replies.map(r => r.id === replyId ? data.reply : r),
+        }));
+        setEditingId(null);
+        setEditText("");
+      } catch (e) {
+        toast(e.message, "err");
+      } finally {
+        setEditSaving(false);
+      }
+    }
+
+    async function deleteReply(replyId) {
+      try {
+        await api("DELETE", `/replies/${replyId}`);
+        setTicket(t => ({ ...t, replies: t.replies.filter(r => r.id !== replyId) }));
+        toast("Reply deleted");
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    }
 
     if (!currentUser) {
       return window.React.createElement(EmptyState, { icon: "fa-lock", title: "Login required" });
@@ -495,14 +563,16 @@
         title: "Ticket not found",
         subtitle: "This ticket doesn't exist or you don't have access to it.",
         action: window.React.createElement("button", {
-          type: "button", className: "btn-ghost",
-          style: { fontSize: 13 },
+          type: "button", className: "btn-ghost", style: { fontSize: 13 },
           onClick: () => NE.navigate(`/ext/${SLUG}/`),
         }, "Back to tickets"),
       });
     }
 
-    return window.React.createElement("div", { style: { maxWidth: 720, margin: "28px auto 0" } },
+    const canReply = ticket.status !== "closed" || isStaff;
+    const isOwner  = ticket.user?.id === currentUser?.id;
+
+    return window.React.createElement("div", { style: { maxWidth: 720, margin: "28px auto 0", paddingBottom: 48 } },
 
       // Back
       window.React.createElement("button", {
@@ -525,24 +595,20 @@
           borderRadius: 12, padding: "18px 20px", marginBottom: 16,
         }
       },
-        window.React.createElement("div", {
-          style: { display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }
-        },
-          window.React.createElement("div", { style: { flex: 1, minWidth: 0 } },
-            window.React.createElement("div", {
-              style: { fontSize: 17, fontWeight: 700, color: "var(--t1)", marginBottom: 8, lineHeight: 1.3 }
-            }, ticket.subject),
-            window.React.createElement("div", {
-              style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }
-            },
-              window.React.createElement(StatusBadge, { status: ticket.status }),
-              window.React.createElement(CategoryPill, { category: ticket.category }),
-              window.React.createElement("span", { style: { fontSize: 11, color: "var(--t5)" } },
-                `#${ticket.id} · opened ${fmt(ticket.inserted_at)}`
-              ),
-              ticket.user && window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)" } },
-                `by ${ticket.user.username}`
-              )
+        window.React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+          window.React.createElement("div", {
+            style: { fontSize: 17, fontWeight: 700, color: "var(--t1)", marginBottom: 8, lineHeight: 1.3 }
+          }, ticket.subject),
+          window.React.createElement("div", {
+            style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }
+          },
+            window.React.createElement(StatusBadge, { status: ticket.status }),
+            window.React.createElement(CategoryPill, { category: ticket.category }),
+            window.React.createElement("span", { style: { fontSize: 11, color: "var(--t5)" } },
+              `#${ticket.id} · opened ${fmt(ticket.inserted_at)}`
+            ),
+            ticket.user && window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)" } },
+              `by ${ticket.user.username}`
             )
           )
         ),
@@ -565,39 +631,136 @@
       ),
 
       // Reply thread
-      window.React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
-        (ticket.replies || []).map(reply =>
+      window.React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 } },
+        (ticket.replies || []).map((reply, idx) =>
           window.React.createElement(ReplyBubble, {
             key: reply.id,
             reply,
             isStaff,
             currentUser,
+            isFirst: idx === 0,
+            isEditing: editingId === reply.id,
+            editText,
+            editSaving,
+            onEditText:   setEditText,
+            onStartEdit:  startEdit,
+            onCancelEdit: cancelEdit,
+            onSaveEdit:   saveEdit,
+            onDelete:     deleteReply,
           })
+        )
+      ),
+
+      // Reply composer
+      canReply && window.React.createElement("div", {
+        style: {
+          background: "var(--s2)", border: "0.5px solid var(--b1)",
+          borderRadius: 12, padding: "16px",
+        }
+      },
+        // Internal note toggle — staff only
+        isStaff && window.React.createElement("div", {
+          style: {
+            display: "flex", alignItems: "center", gap: 10,
+            marginBottom: 10, padding: "8px 12px",
+            background: isNote ? "rgba(251,191,36,0.06)" : "var(--s1)",
+            border: `0.5px solid ${isNote ? "rgba(251,191,36,0.25)" : "var(--b2)"}`,
+            borderRadius: 8, cursor: "pointer",
+          },
+          onClick: () => setIsNote(n => !n),
+        },
+          window.React.createElement("div", {
+            style: {
+              width: 18, height: 18, borderRadius: 4, border: "1.5px solid",
+              borderColor: isNote ? "var(--amber)" : "var(--b2)",
+              background:  isNote ? "var(--amber)"  : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, transition: "all 0.12s",
+            }
+          },
+            isNote && window.React.createElement("i", {
+              className: "fa-solid fa-check",
+              style: { fontSize: 9, color: "#000" }
+            })
+          ),
+          window.React.createElement("div", null,
+            window.React.createElement("div", { style: { fontSize: 12, fontWeight: 500, color: isNote ? "var(--amber)" : "var(--t3)" } },
+              "Internal note"
+            ),
+            window.React.createElement("div", { style: { fontSize: 11, color: "var(--t5)" } },
+              "Only visible to staff"
+            )
+          )
         ),
 
-        // Empty thread (shouldn't happen — ticket always has opening reply)
-        ticket.replies && ticket.replies.length === 0 && window.React.createElement("div", {
-          style: { padding: "24px 0", textAlign: "center", color: "var(--t5)", fontSize: 13 }
-        }, "No messages yet.")
+        // Textarea
+        window.React.createElement("textarea", {
+          style: {
+            width: "100%", boxSizing: "border-box",
+            padding: "10px 12px", fontSize: 13,
+            borderRadius: 8, border: "0.5px solid var(--b2)",
+            background: "var(--s1)", color: "var(--t1)",
+            outline: "none", resize: "vertical", minHeight: 96,
+          },
+          placeholder: isNote ? "Write an internal note…" : "Write a reply…",
+          value: replyText,
+          onChange: e => setReplyText(e.target.value),
+          onKeyDown: e => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleReply();
+          },
+        }),
+
+        // Submit row
+        window.React.createElement("div", {
+          style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }
+        },
+          window.React.createElement("span", { style: { fontSize: 11, color: "var(--t5)" } },
+            "Cmd/Ctrl + Enter to send"
+          ),
+          window.React.createElement("button", {
+            type: "button", className: "btn-primary",
+            disabled: submitting || !replyText.trim(),
+            onClick: handleReply,
+            style: { fontSize: 13 },
+          }, submitting ? "Sending…" : (isNote ? "Post note" : "Send reply"))
+        )
+      ),
+
+      // Closed notice for members
+      !canReply && window.React.createElement("div", {
+        style: {
+          padding: "14px 16px", borderRadius: 10,
+          background: "var(--s2)", border: "0.5px solid var(--b1)",
+          fontSize: 13, color: "var(--t4)", textAlign: "center",
+        }
+      },
+        window.React.createElement("i", { className: "fa-solid fa-lock", style: { marginRight: 8 } }),
+        "This ticket is closed."
       )
     );
   }
 
-  function ReplyBubble({ reply, isStaff, currentUser }) {
-    const isNote = reply.is_internal_note;
-    const isOwn  = reply.user?.id === currentUser?.id;
+  function ReplyBubble({
+    reply, isStaff, currentUser, isFirst,
+    isEditing, editText, editSaving,
+    onEditText, onStartEdit, onCancelEdit, onSaveEdit, onDelete,
+  }) {
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const isNote   = reply.is_internal_note;
+    const isOwn    = reply.user?.id === currentUser?.id;
+    const canEdit  = isOwn || isStaff;
+    const canDelete= isStaff && !isFirst;
 
     return window.React.createElement("div", {
       style: {
         background: isNote ? "rgba(251,191,36,0.06)" : "var(--s2)",
         border: `0.5px solid ${isNote ? "rgba(251,191,36,0.25)" : "var(--b1)"}`,
-        borderRadius: 12,
-        padding: "14px 16px",
+        borderRadius: 12, padding: "14px 16px",
       }
     },
       // Header
       window.React.createElement("div", {
-        style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }
+        style: { display: "flex", alignItems: "center", gap: 8, marginBottom: isEditing ? 10 : 8 }
       },
         reply.user && window.React.createElement(Av, { user: reply.user, size: 26 }),
         window.React.createElement("div", { style: { flex: 1, minWidth: 0 } },
@@ -631,19 +794,94 @@
               "(edited)"
             )
           )
+        ),
+
+        // Action buttons — shown when not editing and user has permission
+        !isEditing && (canEdit || canDelete) && window.React.createElement("div", {
+          style: { display: "flex", gap: 4, flexShrink: 0 }
+        },
+          canEdit && !confirmDelete && window.React.createElement("button", {
+            type: "button",
+            onClick: () => onStartEdit(reply),
+            style: {
+              background: "none", border: "none", cursor: "pointer",
+              color: "var(--t5)", fontSize: 12, padding: "2px 6px",
+              borderRadius: 5,
+            },
+            title: "Edit",
+          }, window.React.createElement("i", { className: "fa-solid fa-pen" })),
+
+          canDelete && !confirmDelete && window.React.createElement("button", {
+            type: "button",
+            onClick: () => setConfirmDelete(true),
+            style: {
+              background: "none", border: "none", cursor: "pointer",
+              color: "var(--t5)", fontSize: 12, padding: "2px 6px",
+              borderRadius: 5,
+            },
+            title: "Delete",
+          }, window.React.createElement("i", { className: "fa-solid fa-trash" })),
+
+          // Delete confirmation
+          confirmDelete && window.React.createElement("div", {
+            style: { display: "flex", alignItems: "center", gap: 6 }
+          },
+            window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)" } }, "Delete?"),
+            window.React.createElement("button", {
+              type: "button",
+              onClick: () => { onDelete(reply.id); setConfirmDelete(false); },
+              style: {
+                fontSize: 11, padding: "2px 8px", borderRadius: 5, cursor: "pointer",
+                background: "var(--red)", color: "#fff", border: "none",
+              },
+            }, "Yes"),
+            window.React.createElement("button", {
+              type: "button",
+              onClick: () => setConfirmDelete(false),
+              style: {
+                fontSize: 11, padding: "2px 8px", borderRadius: 5, cursor: "pointer",
+                background: "var(--s3)", color: "var(--t3)", border: "none",
+              },
+            }, "No")
+          )
         )
       ),
 
-      // Body
-      window.React.createElement("div", { className: "md-body" },
-        window.React.createElement(Md, { text: reply.content })
-      )
+      // Body — edit mode or read mode
+      isEditing
+        ? window.React.createElement("div", null,
+            window.React.createElement("textarea", {
+              style: {
+                width: "100%", boxSizing: "border-box",
+                padding: "9px 12px", fontSize: 13,
+                borderRadius: 8, border: "0.5px solid var(--ac)",
+                background: "var(--s1)", color: "var(--t1)",
+                outline: "none", resize: "vertical", minHeight: 80,
+              },
+              value: editText,
+              autoFocus: true,
+              onChange: e => onEditText(e.target.value),
+            }),
+            window.React.createElement("div", {
+              style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }
+            },
+              window.React.createElement("button", {
+                type: "button", className: "btn-ghost",
+                style: { fontSize: 12 },
+                onClick: onCancelEdit,
+                disabled: editSaving,
+              }, "Cancel"),
+              window.React.createElement("button", {
+                type: "button", className: "btn-primary",
+                style: { fontSize: 12 },
+                onClick: () => onSaveEdit(reply.id),
+                disabled: editSaving || !editText.trim(),
+              }, editSaving ? "Saving…" : "Save")
+            )
+          )
+        : window.React.createElement(Md, { text: reply.content })
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Status filter wrapper — /status/:filter routes here
-  // ---------------------------------------------------------------------------
 
   function FilteredIndexPage({ currentUser, navigate, filter }) {
     return window.React.createElement(TicketIndexPage, { currentUser, navigate, filter });

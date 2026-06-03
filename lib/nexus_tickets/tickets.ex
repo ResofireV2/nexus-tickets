@@ -210,4 +210,22 @@ defmodule NexusTickets.Tickets do
       total:         Enum.sum(Map.values(counts))
     }
   end
+
+  @doc """
+  Returns true if the given reply is the opening message of its ticket.
+  The opening reply is the one with the earliest inserted_at for that ticket.
+  Used to prevent staff from deleting the ticket body.
+  """
+  def is_opening_reply?(%Reply{id: reply_id, ticket_id: ticket_id}) do
+    oldest_id =
+      from(r in Reply,
+        where: r.ticket_id == ^ticket_id,
+        order_by: [asc: r.inserted_at],
+        limit: 1,
+        select: r.id
+      )
+      |> Repo.one()
+
+    oldest_id == reply_id
+  end
 end
