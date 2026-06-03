@@ -26,8 +26,7 @@ defmodule NexusTickets.ApiRouter do
     case check_permission(conn, "can_manage_categories") do
       :error -> forbidden(conn)
       :ok ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        attrs = Jason.decode!(body)
+        attrs = conn.body_params
 
         case Categories.create_category(attrs) do
           {:ok, category} ->
@@ -49,8 +48,7 @@ defmodule NexusTickets.ApiRouter do
             send_json(conn, 404, %{error: "Category not found"})
 
           category ->
-            {:ok, body, conn} = Plug.Conn.read_body(conn)
-            attrs = Jason.decode!(body)
+            attrs = conn.body_params
 
             case Categories.update_category(category, attrs) do
               {:ok, updated} ->
@@ -84,9 +82,7 @@ defmodule NexusTickets.ApiRouter do
     case check_permission(conn, "can_manage_categories") do
       :error -> forbidden(conn)
       :ok ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        case Jason.decode!(body) do
+        case conn.body_params do
           %{"ids" => ids} when is_list(ids) ->
             :ok = Categories.reorder_categories(ids)
             send_json(conn, 200, %{ok: true})
