@@ -16,6 +16,6 @@ defmodule NexusTickets do
 
   @impl true
   def routes do
-    [{"/api", NexusTickets.ApiRouter, []}]
+    [{"/", NexusTickets.ApiRouter, []}]
   end
 end
