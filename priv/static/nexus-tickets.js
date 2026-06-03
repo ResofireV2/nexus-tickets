@@ -476,6 +476,8 @@
     const [editingId,   setEditingId]   = useState(null);  // reply id being edited
     const [editText,    setEditText]    = useState("");
     const [editSaving,  setEditSaving]  = useState(false);
+    const [staffList,   setStaffList]   = useState([]);
+    const [updating,    setUpdating]    = useState(false);
     const isStaff = currentUser?.role === "moderator" || currentUser?.role === "admin";
 
     function loadTicket() {
@@ -490,6 +492,25 @@
     }
 
     useEffect(() => { loadTicket(); }, [id, currentUser]);
+
+    useEffect(() => {
+      if (!isStaff) return;
+      api("GET", "/admin/staff")
+        .then(d => setStaffList(d.staff || []))
+        .catch(() => {});
+    }, [isStaff]);
+
+    async function updateTicket(attrs) {
+      setUpdating(true);
+      try {
+        const data = await api("PATCH", `/tickets/${id}`, attrs);
+        setTicket(t => ({ ...t, ...data.ticket }));
+      } catch (e) {
+        toast(e.message, "err");
+      } finally {
+        setUpdating(false);
+      }
+    }
 
     async function handleReply() {
       if (!replyText.trim()) return;
@@ -595,13 +616,15 @@
           borderRadius: 12, padding: "18px 20px", marginBottom: 16,
         }
       },
-        window.React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+        // Subject + meta row
+        window.React.createElement("div", { style: { flex: 1, minWidth: 0, marginBottom: isStaff ? 14 : 0 } },
           window.React.createElement("div", {
             style: { fontSize: 17, fontWeight: 700, color: "var(--t1)", marginBottom: 8, lineHeight: 1.3 }
           }, ticket.subject),
           window.React.createElement("div", {
             style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }
           },
+            // Members see read-only status badge; staff see it too for quick reference
             window.React.createElement(StatusBadge, { status: ticket.status }),
             window.React.createElement(CategoryPill, { category: ticket.category }),
             window.React.createElement("span", { style: { fontSize: 11, color: "var(--t5)" } },
@@ -613,8 +636,70 @@
           )
         ),
 
-        // Assigned staff row
-        ticket.assigned_staff && window.React.createElement("div", {
+        // Staff controls — status + assignment
+        isStaff && window.React.createElement("div", {
+          style: {
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            paddingTop: 14, borderTop: "0.5px solid var(--b1)",
+          }
+        },
+          // Status selector
+          window.React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+            window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)", flexShrink: 0 } }, "Status"),
+            window.React.createElement("select", {
+              disabled: updating,
+              value: ticket.status,
+              onChange: e => updateTicket({ status: e.target.value }),
+              style: {
+                fontSize: 12, padding: "4px 8px", borderRadius: 7,
+                border: "0.5px solid var(--b2)", background: "var(--s1)",
+                color: "var(--t1)", cursor: "pointer", outline: "none",
+              }
+            },
+              window.React.createElement("option", { value: "open" },          "Open"),
+              window.React.createElement("option", { value: "in_progress" },   "In Progress"),
+              window.React.createElement("option", { value: "awaiting_user" }, "Awaiting Reply"),
+              window.React.createElement("option", { value: "resolved" },      "Resolved"),
+              window.React.createElement("option", { value: "closed" },        "Closed")
+            )
+          ),
+
+          // Divider
+          window.React.createElement("div", {
+            style: { width: "0.5px", height: 16, background: "var(--b2)", alignSelf: "center" }
+          }),
+
+          // Assignment selector
+          window.React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+            window.React.createElement("span", { style: { fontSize: 11, color: "var(--t4)", flexShrink: 0 } }, "Assigned to"),
+            window.React.createElement("select", {
+              disabled: updating,
+              value: ticket.assigned_staff?.id ?? "",
+              onChange: e => updateTicket({ assigned_staff_id: e.target.value || null }),
+              style: {
+                fontSize: 12, padding: "4px 8px", borderRadius: 7,
+                border: "0.5px solid var(--b2)", background: "var(--s1)",
+                color: "var(--t1)", cursor: "pointer", outline: "none",
+              }
+            },
+              window.React.createElement("option", { value: "" }, "Unassigned"),
+              staffList.map(s =>
+                window.React.createElement("option", { key: s.id, value: s.id }, s.username)
+              )
+            )
+          ),
+
+          // Saving indicator
+          updating && window.React.createElement("span", {
+            style: { fontSize: 11, color: "var(--t5)" }
+          },
+            window.React.createElement("i", { className: "fa-solid fa-spinner fa-spin", style: { marginRight: 4 } }),
+            "Saving…"
+          )
+        ),
+
+        // Member view — assigned staff (read-only)
+        !isStaff && ticket.assigned_staff && window.React.createElement("div", {
           style: {
             display: "flex", alignItems: "center", gap: 8, marginTop: 10,
             paddingTop: 10, borderTop: "0.5px solid var(--b1)",

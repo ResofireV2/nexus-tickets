@@ -184,6 +184,40 @@ defmodule NexusTickets.ApiRouter do
   end
 
   # ---------------------------------------------------------------------------
+  # Update ticket — status, assignment, category (staff only)
+  # ---------------------------------------------------------------------------
+
+  patch "/tickets/:id" do
+    case check_permission(conn, "can_handle_tickets") do
+      :error -> forbidden(conn)
+      :ok ->
+        case Tickets.get_ticket(conn.params["id"]) do
+          nil ->
+            send_json(conn, 404, %{error: "Ticket not found"})
+
+          ticket ->
+            # Build attrs from allowed fields only
+            allowed = ["status", "assigned_staff_id", "category_id"]
+            attrs   = Map.take(conn.body_params, allowed)
+
+            # Validate assigned_staff_id if provided
+            with :ok <- validate_assignee(attrs) do
+              case Tickets.update_ticket(ticket, attrs) do
+                {:ok, updated} ->
+                  updated = Nexus.Repo.preload(updated, [:category, :user, :assigned_staff])
+                  send_json(conn, 200, %{ticket: ticket_json(updated)})
+
+                {:error, changeset} ->
+                  send_json(conn, 422, %{errors: format_errors(changeset)})
+              end
+            else
+              {:error, reason} -> send_json(conn, 422, %{error: reason})
+            end
+        end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Soft delete / restore ticket
   # ---------------------------------------------------------------------------
 
@@ -337,6 +371,20 @@ defmodule NexusTickets.ApiRouter do
   # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
+
+  defp validate_assignee(%{"assigned_staff_id" => nil}), do: :ok
+  defp validate_assignee(%{"assigned_staff_id" => id}) do
+    case Nexus.Accounts.get_user(id) do
+      nil  -> {:error, "Assigned user not found"}
+      user ->
+        if user.role in ["moderator", "admin"] do
+          :ok
+        else
+          {:error, "Assigned user must be a moderator or admin"}
+        end
+    end
+  end
+  defp validate_assignee(_attrs), do: :ok
 
   defp check_permission(conn, key) do
     Permissions.check("nexus-tickets", key, conn.assigns[:current_user])
