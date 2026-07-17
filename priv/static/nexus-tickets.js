@@ -4,7 +4,6 @@
   const NE   = window.NexusExtensions;
   const SLUG = "nexus-tickets";
   const { useState, useEffect, useCallback, useRef } = window.React;
-  const { TabbedPanel, SimpleSettingsPanel } = window.NexusExtensionTemplates;
   const { Av, Md, toast } = window.NexusComponents;
 
   // ---------------------------------------------------------------------------
@@ -1375,6 +1374,7 @@
   }
 
   function AdminPanel() {
+    const { TabbedPanel, SimpleSettingsPanel } = window.NexusExtensionTemplates;
     return window.React.createElement(TabbedPanel, {
       tabs: [
         { key:"categories", label:"Categories", icon:"fa-tags",  render:()=>window.React.createElement(CategoriesTab,null) },
