@@ -371,7 +371,7 @@
               padding: "5px 12px", borderRadius: 7,
               border: "none", cursor: "pointer",
               background: activeFilter === f.key ? "var(--ac)" : "transparent",
-              color:      activeFilter === f.key ? "#fff"       : "var(--t3)",
+              color:      activeFilter === f.key ? "var(--ac-on)" : "var(--t3)",
               transition: "background 0.12s, color 0.12s",
             }
           }, f.label)
